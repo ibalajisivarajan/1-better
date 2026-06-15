@@ -12,7 +12,7 @@ interface TodayMissionState {
 }
 
 function getWeekNumber(startDate: string, today: Date): number {
-  const start = new Date(startDate + 'T00:00:00')
+  const start = new Date(startDate + 'T00:00:00Z')
   const diffMs = today.getTime() - start.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
   return Math.max(1, Math.min(52, Math.floor(diffDays / 7) + 1))
@@ -51,9 +51,12 @@ function getWeekBounds(timezone: string): { monday: string; sunday: string } {
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
 
+  function formatDate(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+  }
   return {
-    monday: monday.toISOString().split('T')[0],
-    sunday: sunday.toISOString().split('T')[0],
+    monday: formatDate(monday),
+    sunday: formatDate(sunday),
   }
 }
 
@@ -81,34 +84,22 @@ export function useTodayMission(user: User | null, profile: Profile | null): Tod
     async function fetchData() {
       setLoading(true)
       try {
-        // Fetch mission for current week
-        const { data: missionData, error: missionError } = await supabase
-          .from('missions')
-          .select('*')
-          .eq('week_number', week)
-          .single()
+        // Fetch mission and logs in parallel
+        const [
+          { data: missionData, error: missionError },
+          { data: todayLog },
+          { data: weekLogs },
+        ] = await Promise.all([
+          supabase.from('missions').select('*').eq('week_number', week).single(),
+          supabase.from('daily_log').select('done_date').eq('user_id', user!.id).eq('done_date', today).single(),
+          supabase.from('daily_log').select('done_date').eq('user_id', user!.id).gte('done_date', monday).lte('done_date', sunday),
+        ])
 
         if (!missionError && missionData) {
           setMission(missionData as Mission)
         }
 
-        // Fetch today's log
-        const { data: todayLog } = await supabase
-          .from('daily_log')
-          .select('done_date')
-          .eq('user_id', user!.id)
-          .eq('done_date', today)
-          .single()
-
         setTodayDone(!!todayLog)
-
-        // Fetch this week's logs (Mon-Sun)
-        const { data: weekLogs } = await supabase
-          .from('daily_log')
-          .select('done_date')
-          .eq('user_id', user!.id)
-          .gte('done_date', monday)
-          .lte('done_date', sunday)
 
         // Build 7-boolean array (Mon=0, Sun=6)
         const dots = Array(7).fill(false)

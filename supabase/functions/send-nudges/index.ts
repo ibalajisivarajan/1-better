@@ -286,8 +286,8 @@ async function encryptPayload(
   // Derive CEK (Content Encryption Key, 16 bytes) and Nonce (12 bytes)
   // key_info   = "Content-Encoding: aes128gcm\0\x01"
   // nonce_info = "Content-Encoding: nonce\0\x01"
-  const cekInfo = encoder.encode('Content-Encoding: aes128gcm\x00\x01')
-  const nonceInfo = encoder.encode('Content-Encoding: nonce\x00\x01')
+  const cekInfo = encoder.encode('Content-Encoding: aes128gcm\x00')
+  const nonceInfo = encoder.encode('Content-Encoding: nonce\x00')
 
   const cek = await hkdf(salt, ikm, cekInfo, 16)
   const nonce = await hkdf(salt, ikm, nonceInfo, 12)
@@ -357,7 +357,7 @@ async function sendWebPush(
   vapidPub: string,
   vapidPriv: string,
   subject: string
-): Promise<void> {
+): Promise<{ ok: boolean; status: number; body: string }> {
   const endpointURL = new URL(sub.endpoint)
   const audience = `${endpointURL.protocol}//${endpointURL.host}`
 
@@ -381,10 +381,8 @@ async function sendWebPush(
     body: encryptedBody,
   })
 
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Push endpoint returned ${response.status}: ${body.slice(0, 200)}`)
-  }
+  const body = await response.text()
+  return { ok: response.ok, status: response.status, body: body.slice(0, 200) }
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +586,11 @@ Deno.serve(async (req: Request) => {
 
   const result: SendResult = { sent: 0, skipped: 0, errors: [] }
 
+  // Pre-fetch all missions into a lookup map (≤52 rows)
+  const { data: allMissions } = await supabase.from('missions').select('*')
+  const missionMap = new Map<number, Mission>()
+  for (const m of allMissions ?? []) missionMap.set(m.week_number, m)
+
   // --- Process each profile -------------------------------------------------
   for (const profile of (profiles ?? []) as Profile[]) {
     try {
@@ -623,17 +626,8 @@ Deno.serve(async (req: Request) => {
       // (h) Determine current week number from start_date
       const weekNumber = getWeekNumber(profile.start_date, todayLocal)
 
-      // (i) Fetch the week's mission
-      const { data: mission, error: missionError } = await supabase
-        .from('missions')
-        .select('week_number, area, action, why, micro')
-        .eq('week_number', weekNumber)
-        .maybeSingle()
-
-      if (missionError) {
-        result.errors.push(`mission fetch failed for week ${weekNumber}: ${missionError.message}`)
-        continue
-      }
+      // (i) Look up the week's mission from the pre-fetched map
+      const mission = missionMap.get(weekNumber) ?? null
 
       if (!mission) {
         // No mission configured for this week — skip silently
@@ -663,13 +657,11 @@ Deno.serve(async (req: Request) => {
       // (k) Send Web Push to each subscription
       for (const sub of subscriptions as PushSub[]) {
         try {
-          await sendWebPush(sub, notificationPayload, vapidPublicKey, vapidPrivateKey, vapidSubject)
-          result.sent++
-        } catch (pushError) {
-          const msg = pushError instanceof Error ? pushError.message : String(pushError)
-
-          // 404 or 410 means subscription is expired — remove it
-          if (msg.includes('404') || msg.includes('410')) {
+          const pushResult = await sendWebPush(sub, notificationPayload, vapidPublicKey, vapidPrivateKey, vapidSubject)
+          if (pushResult.ok) {
+            result.sent++
+          } else if (pushResult.status === 404 || pushResult.status === 410) {
+            // Subscription is expired — remove it
             await supabase
               .from('push_subscriptions')
               .delete()
@@ -677,8 +669,11 @@ Deno.serve(async (req: Request) => {
               .eq('endpoint', sub.endpoint)
             result.errors.push(`Removed expired subscription for ${profile.user_id}: ${sub.endpoint.slice(0, 60)}…`)
           } else {
-            result.errors.push(`Push failed for ${profile.user_id}: ${msg}`)
+            result.errors.push(`Push failed for ${profile.user_id}: HTTP ${pushResult.status}: ${pushResult.body}`)
           }
+        } catch (pushError) {
+          const msg = pushError instanceof Error ? pushError.message : String(pushError)
+          result.errors.push(`Push failed for ${profile.user_id}: ${msg}`)
         }
       }
     } catch (profileError) {
