@@ -1,12 +1,13 @@
 name: Nudge Cron
 
 on:
-  schedule:
-    # Runs every 15 minutes, 24/7.
-    # Smallest interval GitHub Actions supports is 5 min, but 15 min is
-    # sufficient — our edge function matches nudge_times within ±7 minutes.
-    - cron: '*/15 * * * *'
-  # Allow manual trigger for smoke-testing without waiting for the schedule.
+  # Schedule disabled until Supabase project and secrets are configured.
+  # To re-enable: uncomment the schedule block below and push.
+  #
+  # schedule:
+  #   - cron: '*/15 * * * *'
+  #
+  # Manual trigger only — useful for smoke-testing once secrets are set.
   workflow_dispatch:
 
 jobs:
