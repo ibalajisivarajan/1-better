@@ -49,7 +49,7 @@ export function SettingsPage({ user }: SettingsPageProps) {
   }, [profile])
 
   const handleSave = async () => {
-    if (!isConfigured) return
+    if (!isConfigured || !profile) return
     setSaving(true)
     setSaved(false)
 
@@ -59,7 +59,7 @@ export function SettingsPage({ user }: SettingsPageProps) {
         nudge_times: nudgeTimes,
         timezone,
         nudges_enabled: nudgesEnabled,
-        start_date: profile?.start_date ?? new Date().toISOString().split('T')[0],
+        start_date: profile.start_date,
       },
       { onConflict: 'user_id' }
     )
@@ -250,7 +250,7 @@ export function SettingsPage({ user }: SettingsPageProps) {
             {/* Save button */}
             <button
               onClick={handleSave}
-              disabled={saving || !isConfigured}
+              disabled={saving || !isConfigured || !profile}
               className="w-full py-3 px-4 rounded-xl font-body font-medium text-sm transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-40"
               style={{ backgroundColor: '#2A251D', color: '#F2ECE0' }}
             >

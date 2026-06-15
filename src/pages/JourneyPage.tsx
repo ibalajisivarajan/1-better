@@ -70,18 +70,13 @@ export function JourneyPage({ user }: JourneyPageProps) {
     summary.isWon = summary.daysLogged >= 7
   }
 
-  // Current week number
+  // Current week number — matches getWeekNumber in useTodayMission.ts exactly
   const currentWeek = profile
-    ? Math.max(
-        1,
-        Math.min(
-          52,
-          Math.floor(
-            (Date.now() - new Date(profile.start_date + 'T00:00:00').getTime()) /
-              (1000 * 60 * 60 * 24 * 7)
-          ) + 1
-        )
-      )
+    ? (() => {
+        const start = new Date(profile.start_date + 'T00:00:00Z')
+        const diffDays = Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24))
+        return Math.max(1, Math.min(52, Math.floor(diffDays / 7) + 1))
+      })()
     : 1
 
   const totalDays = logs.length

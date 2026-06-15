@@ -175,9 +175,6 @@ export function TodayPage({ user }: TodayPageProps) {
                 )}
               </div>
 
-              {/* Week dots */}
-              <WeekDots dots={effectiveWeekDots} todayIndex={todayIndex} />
-
               {/* Done or hold button */}
               {effectiveTodayDone ? (
                 <GlassCard className="text-center">

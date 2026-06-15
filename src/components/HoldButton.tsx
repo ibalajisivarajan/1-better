@@ -55,9 +55,9 @@ export function HoldButton({ onComplete, disabled = false }: HoldButtonProps) {
   }, [disabled, tick])
 
   const endHold = useCallback(() => {
-    if (!holding) return
+    if (startTimeRef.current === null) return  // not currently holding
     cancel()
-  }, [holding, cancel])
+  }, [cancel])
 
   return (
     <button
