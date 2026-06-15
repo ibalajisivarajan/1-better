@@ -1,0 +1,47 @@
+name: Nudge Cron
+
+on:
+  schedule:
+    # Runs every 15 minutes, 24/7.
+    # Smallest interval GitHub Actions supports is 5 min, but 15 min is
+    # sufficient — our edge function matches nudge_times within ±7 minutes.
+    - cron: '*/15 * * * *'
+  # Allow manual trigger for smoke-testing without waiting for the schedule.
+  workflow_dispatch:
+
+jobs:
+  send-nudges:
+    name: Send push nudges
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Call send-nudges edge function
+        env:
+          SEND_NUDGES_URL: ${{ secrets.SEND_NUDGES_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Calling edge function at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+          HTTP_STATUS=$(curl \
+            --silent \
+            --show-error \
+            --output /tmp/nudge-response.json \
+            --write-out "%{http_code}" \
+            --max-time 90 \
+            --retry 2 \
+            --retry-delay 5 \
+            -X POST \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "${SEND_NUDGES_URL}")
+
+          echo "HTTP status: ${HTTP_STATUS}"
+          echo "Response body:"
+          cat /tmp/nudge-response.json || true
+
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: Edge function returned unexpected status ${HTTP_STATUS}"
+            exit 1
+          fi
+
+          echo "Done."
