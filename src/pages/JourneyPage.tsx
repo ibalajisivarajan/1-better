@@ -6,9 +6,7 @@ import { NotConnectedBanner } from '../components/NotConnectedBanner'
 import { OrbBackground } from '../components/OrbBackground'
 import { supabase, isConfigured } from '../lib/supabase'
 import { useProfile } from '../hooks/useProfile'
-import type { DailyLog, Mission } from '../types'
-
-type Area = Mission['area']
+import type { DailyLog } from '../types'
 
 const areaColors: Record<string, string> = {
   Body: '#FF9E7D',

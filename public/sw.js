@@ -1,15 +1,21 @@
 const CACHE_NAME = '1-better-v1'
 
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/icons/icon-192.png',
-]
+// Workbox injects precache manifest here at build time
+// In development this is an empty array
+const PRECACHE_URLS = self.__WB_MANIFEST || []
 
-// Install: precache essential files
+// Install: precache essential files + workbox manifest assets
 self.addEventListener('install', (event) => {
+  const urlsToCache = [
+    '/',
+    '/index.html',
+    '/icons/icon-192.png',
+    ...PRECACHE_URLS.map((entry) =>
+      typeof entry === 'string' ? entry : entry.url
+    ),
+  ]
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache).catch(() => {}))
   )
   self.skipWaiting()
 })
